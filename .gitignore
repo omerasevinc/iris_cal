@@ -1,3 +1,10 @@
-client/.env.local
+node_modules/
+dist/
+client/dist/
+server/dist/
+.env
 .env.local
-.vercel
+client/.env.local
+server/data/
+.vercel/
+*.tsbuildinfo
