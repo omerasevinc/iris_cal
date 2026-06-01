@@ -4,6 +4,7 @@ import authRouter from './routes/auth'
 import mealsRouter from './routes/meals'
 import settingsRouter from './routes/settings'
 import chatRouter from './routes/chat'
+import nutritionChatRouter from './routes/nutrition-chat'
 
 const app = express()
 
@@ -21,5 +22,6 @@ app.use('/api/auth', authRouter)
 app.use('/api/meals', mealsRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/chat', chatRouter)
+app.use('/api/nutrition-chat', nutritionChatRouter)
 
 export default app

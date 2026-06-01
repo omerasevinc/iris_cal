@@ -108,6 +108,15 @@ export async function chatApi(messages: ChatApiMessage[]): Promise<ChatApiRespon
   })
 }
 
+export type NutritionChatMessage = ChatApiMessage
+
+export async function nutritionChatApi(messages: NutritionChatMessage[]): Promise<ChatApiResponse> {
+  return apiFetch<ChatApiResponse>('/nutrition-chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages }),
+  })
+}
+
 // ─── Multi-user localStorage helpers ─────────────────────────────────────────
 
 export function getActiveUserId(): number | null {

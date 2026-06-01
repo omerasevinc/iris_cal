@@ -7,6 +7,7 @@ import { LogMeal } from './pages/LogMeal'
 import { History } from './pages/History'
 import { Calendar } from './pages/Calendar'
 import { Settings } from './pages/Settings'
+import { NutritionChat } from './pages/NutritionChat'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth()
@@ -56,6 +57,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <NutritionChat />
           </ProtectedRoute>
         }
       />

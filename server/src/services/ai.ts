@@ -137,6 +137,135 @@ Rules for the JSON block:
 - Omit the [MEAL_JSON] block entirely for general nutrition questions where no specific meal has been identified
 - When the user corrects an incorrect identification or adjusts a portion size, you MUST include the [MEAL_JSON] block with the corrected values — even if you already provided an analysis earlier in the conversation`
 
+// ─── Nutrition Chat ───────────────────────────────────────────────────────────
+
+export interface MealContextItem {
+  meal_name: string
+  logged_at: string
+  items: Array<{ name: string; kcal: number; protein_g: number; fat_g: number; carbs_g: number }>
+  total_kcal: number
+  total_protein_g: number
+  total_fat_g: number
+  total_carbs_g: number
+}
+
+export interface NutritionContext {
+  meals: MealContextItem[]
+  targets: {
+    kcal_target: number
+    protein_target: number
+    fat_target: number
+    carbs_target: number
+  }
+  totals: {
+    kcal: number
+    protein_g: number
+    fat_g: number
+    carbs_g: number
+  }
+}
+
+function buildNutritionSystemPrompt(ctx: NutritionContext): string {
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+
+  const { targets, totals, meals } = ctx
+  const remaining = {
+    kcal: Math.max(0, targets.kcal_target - totals.kcal),
+    protein_g: Math.max(0, targets.protein_target - totals.protein_g),
+    fat_g: Math.max(0, targets.fat_target - totals.fat_g),
+    carbs_g: Math.max(0, targets.carbs_target - totals.carbs_g),
+  }
+
+  let mealSection = 'Bugün henüz öğün kaydedilmedi.'
+  if (meals.length > 0) {
+    mealSection = meals.map((m) => {
+      const time = new Date(m.logged_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+      const itemLines = m.items.map((it) => `    - ${it.name}: ~${Math.round(it.kcal)} kcal, ${Math.round(it.protein_g)}g protein`).join('\n')
+      return `  ${m.meal_name} (${time}):\n${itemLines}\n  Toplam: ${Math.round(m.total_kcal)} kcal | ${Math.round(m.total_protein_g)}g P | ${Math.round(m.total_fat_g)}g Y | ${Math.round(m.total_carbs_g)}g K`
+    }).join('\n\n')
+  }
+
+  return `Sen bir kalori takip uygulamasında samimi ve bilgili bir beslenme koçu ve öğün kayıt asistanısın.
+Kullanıcının yazdığı dilde yanıt ver (Türkçe veya İngilizce).
+Bugün: ${dateStr}, saat ${timeStr}.
+
+Kullanıcının günlük hedefleri:
+  Kalori: ${targets.kcal_target} kcal
+  Protein: ${targets.protein_target}g
+  Yağ: ${targets.fat_target}g
+  Karbonhidrat: ${targets.carbs_target}g
+
+Bugün kaydedilen öğünler:
+${mealSection}
+
+Bugünkü toplamlar:
+  Kalori: ${Math.round(totals.kcal)} / ${targets.kcal_target} kcal (${Math.round(remaining.kcal)} kaldı)
+  Protein: ${Math.round(totals.protein_g)} / ${targets.protein_target}g (${Math.round(remaining.protein_g)}g kaldı)
+  Yağ: ${Math.round(totals.fat_g)} / ${targets.fat_target}g (${Math.round(remaining.fat_g)}g kaldı)
+  Karbonhidrat: ${Math.round(totals.carbs_g)} / ${targets.carbs_target}g (${Math.round(remaining.carbs_g)}g kaldı)
+
+Genel kurallar:
+- Sıcak ve teşvik edici ol
+- Belirsiz tahminler değil, somut sayılar ver
+- Kalan öğünler için net önerilerde bulun (örn. "150g tavuk + salata")
+- Yanıtları özlü tut, liste/madde işareti kullan
+
+Öğün kayıt talimatları:
+- Kullanıcı yemek fotoğrafı gönderdiğinde veya yediği şeyi tarif ettiğinde, öğünü analiz et ve makroları tahmin et.
+- Kullanıcı bir öğünü düzeltirse veya porsiyon farklıysa, yeni değerlerle yeniden hesapla.
+- Yeterince güvenle tanımladığın her öğün için yanıtının SONUNA EXACTLY şu formatı ekle (etiketler arasında boşluk olmasın):
+[MEAL_JSON]{"meal_name":"...","items":[{"name":"...","weight_g":0,"kcal":0,"protein_g":0,"fat_g":0,"carbs_g":0}],"total_kcal":0,"total_protein_g":0,"total_fat_g":0,"total_carbs_g":0,"confidence":"high","notes":""}[/MEAL_JSON]
+- confidence: "high", "medium" veya "low" olmalı
+- Tüm sayılar görünen porsiyon içindir, 100g başına değil
+- Sadece genel beslenme sorularında [MEAL_JSON] bloğunu EKLEME`
+}
+
+export async function nutritionChat(ctx: NutritionContext, messages: ChatMessage[]): Promise<ChatResponse> {
+  const systemPrompt = buildNutritionSystemPrompt(ctx)
+
+  const sdkMessages = messages.map((msg) => ({
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content.map((block) => {
+      if (block.type === 'text') return { type: 'text' as const, text: block.text }
+      return {
+        type: 'image' as const,
+        source: { type: 'base64' as const, media_type: block.media_type, data: block.data },
+      }
+    }),
+  }))
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: sdkMessages,
+  })
+
+  const textBlock = message.content.find((b) => b.type === 'text')
+  if (!textBlock || textBlock.type !== 'text') throw new Error('AI returned no text content')
+
+  const raw = textBlock.text
+  const mealJsonMatch = raw.match(/\[MEAL_JSON\]([\s\S]*?)\[\/MEAL_JSON\]/)
+
+  let text = raw
+  let analysisResult: AiResult | undefined
+
+  if (mealJsonMatch) {
+    text = raw.replace(/\s*\[MEAL_JSON\][\s\S]*?\[\/MEAL_JSON\]/, '').trim()
+    try {
+      const parsed: unknown = JSON.parse(mealJsonMatch[1])
+      const validated = AiResponseSchema.safeParse(parsed)
+      if (validated.success) analysisResult = validated.data
+    } catch {
+      // malformed JSON — return text only
+    }
+  }
+
+  return analysisResult ? { text, analysisResult } : { text }
+}
+
 export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
   const sdkMessages = messages.map((msg) => ({
     role: msg.role as 'user' | 'assistant',

@@ -3,12 +3,14 @@ import {
   apiFetch,
   apiUpload,
   chatApi,
+  nutritionChatApi,
   type MealLog,
   type DayHistory,
   type AnalysisResult,
   type SaveMealBody,
   type UserSettings,
   type ChatApiMessage,
+  type NutritionChatMessage,
 } from '../api'
 
 export function useMeals(date: string) {
@@ -78,6 +80,12 @@ export function useDeleteMeal() {
 export function useChat() {
   return useMutation({
     mutationFn: (messages: ChatApiMessage[]) => chatApi(messages),
+  })
+}
+
+export function useNutritionChat() {
+  return useMutation({
+    mutationFn: (messages: NutritionChatMessage[]) => nutritionChatApi(messages),
   })
 }
 

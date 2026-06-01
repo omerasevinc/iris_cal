@@ -1,15 +1,13 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Camera, Edit3, Send, Trash2, X } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
-import { useAnalyseMeal, useSaveMeal, useChat } from '../hooks/useMeals'
+import { useNutritionChat, useSaveMeal } from '../hooks/useMeals'
 import { EditMealModal } from '../components/EditMealModal'
 import { usePendingMeal } from '../contexts/PendingMealContext'
 import type {
   AnalysisResult,
   SaveMealBody,
   ChatMessage,
-  ChatApiMessage,
   ChatContentBlock,
 } from '../api'
 import { BottomNav } from '../components/BottomNav'
@@ -18,16 +16,9 @@ interface StagedImage {
   previewUrl: string
   base64: string
   mime: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-  file: File
 }
 
-function buildAnalysisSummaryText(r: AnalysisResult): string {
-  const items = r.items.map((it) => `${it.name} (~${Math.round(it.kcal)} kcal)`).join(', ')
-  const notes = r.notes ? `. Note: ${r.notes}` : ''
-  return `I can see ${r.meal_name}. Total: ${Math.round(r.total_kcal)} kcal | ${Math.round(r.total_protein_g)}g protein | ${Math.round(r.total_fat_g)}g fat | ${Math.round(r.total_carbs_g)}g carbs. Items: ${items}. Confidence: ${r.confidence}${notes}.`
-}
-
-function buildChatHistory(messages: ChatMessage[]): ChatApiMessage[] {
+function buildApiHistory(messages: ChatMessage[]) {
   return messages
     .filter((m) => !m.isLoading && (m.text.trim() !== '' || m.imageBase64 != null))
     .map((m) => {
@@ -109,7 +100,6 @@ function ChatAnalysisCard({
 }
 
 export function LogMeal() {
-  const navigate = useNavigate()
   const { messages, setMessages, clearMessages } = usePendingMeal()
   const fileRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -120,9 +110,8 @@ export function LogMeal() {
   const [showModal, setShowModal] = useState(false)
   const [modalData, setModalData] = useState<Partial<AnalysisResult> | null>(null)
 
-  const analyse = useAnalyseMeal()
+  const chatMutation = useNutritionChat()
   const save = useSaveMeal()
-  const chatMutation = useChat()
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -150,13 +139,9 @@ export function LogMeal() {
         chunks.push(String.fromCharCode(...uint8.subarray(i, i + 8192)))
       }
       const base64 = btoa(chunks.join(''))
-      const mime = (compressed.type || 'image/jpeg') as
-        | 'image/jpeg'
-        | 'image/png'
-        | 'image/gif'
-        | 'image/webp'
+      const mime = (compressed.type || 'image/jpeg') as StagedImage['mime']
 
-      setStagedImage({ previewUrl, base64, mime, file: compressed })
+      setStagedImage({ previewUrl, base64, mime })
     } catch {
       setImageError('Could not process this image. Please try another.')
     } finally {
@@ -167,85 +152,47 @@ export function LogMeal() {
   async function handleSend() {
     const trimmed = inputText.trim()
     if (!stagedImage && !trimmed) return
-    if (isLoading) return
+    if (chatMutation.isPending) return
 
-    const userMsgId = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2))
-    const loadingMsgId = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2))
+    const userMsgId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)
+    const loadingMsgId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)
 
-    if (stagedImage) {
-      const newUserMsg: ChatMessage = {
-        id: userMsgId,
-        role: 'user',
-        text: trimmed,
-        imagePreviewUrl: stagedImage.previewUrl,
-        imageBase64: stagedImage.base64,
-        imageMime: stagedImage.mime,
-      }
+    const newUserMsg: ChatMessage = {
+      id: userMsgId,
+      role: 'user',
+      text: trimmed,
+      ...(stagedImage
+        ? { imagePreviewUrl: stagedImage.previewUrl, imageBase64: stagedImage.base64, imageMime: stagedImage.mime }
+        : {}),
+    }
 
-      setMessages((prev) => [
-        ...prev,
-        newUserMsg,
-        { id: loadingMsgId, role: 'assistant', text: '', isLoading: true },
-      ])
-      setInputText('')
-      setStagedImage(null)
+    setMessages((prev) => [
+      ...prev,
+      newUserMsg,
+      { id: loadingMsgId, role: 'assistant', text: '', isLoading: true },
+    ])
+    setInputText('')
+    setStagedImage(null)
 
-      const fileToAnalyse = stagedImage.file
+    const history = buildApiHistory([...messages, newUserMsg])
 
-      try {
-        const result = await analyse.mutateAsync(fileToAnalyse)
-        const summaryText = buildAnalysisSummaryText(result)
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === loadingMsgId
-              ? { ...m, isLoading: false, analysisResult: result, text: summaryText }
-              : m,
-          ),
-        )
-      } catch {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === loadingMsgId
-              ? { ...m, isLoading: false, text: "Sorry, I couldn't analyse that image. Please try again." }
-              : m,
-          ),
-        )
-      }
-    } else {
-      const newUserMsg: ChatMessage = { id: userMsgId, role: 'user', text: trimmed }
-
-      setMessages((prev) => [
-        ...prev,
-        newUserMsg,
-        { id: loadingMsgId, role: 'assistant', text: '', isLoading: true },
-      ])
-      setInputText('')
-
-      const history = buildChatHistory([...messages, newUserMsg])
-
-      try {
-        const result = await chatMutation.mutateAsync(history)
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === loadingMsgId
-              ? {
-                  ...m,
-                  isLoading: false,
-                  text: result.text,
-                  ...(result.analysisResult ? { analysisResult: result.analysisResult } : {}),
-                }
-              : m,
-          ),
-        )
-      } catch {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === loadingMsgId
-              ? { ...m, isLoading: false, text: 'Something went wrong. Please try again.' }
-              : m,
-          ),
-        )
-      }
+    try {
+      const result = await chatMutation.mutateAsync(history)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingMsgId
+            ? { ...m, isLoading: false, text: result.text, ...(result.analysisResult ? { analysisResult: result.analysisResult } : {}) }
+            : m,
+        ),
+      )
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingMsgId
+            ? { ...m, isLoading: false, text: 'Something went wrong. Please try again.' }
+            : m,
+        ),
+      )
     }
   }
 
@@ -263,19 +210,16 @@ export function LogMeal() {
     await save.mutateAsync({ ...data, logged_at: new Date().toISOString() })
     setShowModal(false)
     clearMessages()
-    navigate('/dashboard', { replace: true })
   }
 
-  const isLoading = analyse.isPending || chatMutation.isPending
+  const isLoading = chatMutation.isPending
   const canSend = (!!stagedImage || inputText.trim() !== '') && !isLoading && !compressing
-
   const latestAnalysisId = [...messages].reverse().find((m) => m.analysisResult)?.id ?? null
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 pt-12 pb-3 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">Log meal</h1>
+        <h1 className="text-xl font-bold text-gray-900">Log</h1>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
             <button
@@ -296,7 +240,6 @@ export function LogMeal() {
         </div>
       </header>
 
-      {/* Message list */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
@@ -305,10 +248,11 @@ export function LogMeal() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8 pt-16">
             <Camera size={48} className="mb-4 text-gray-300" />
-            <p className="text-base font-medium text-gray-500">Take a photo of your meal</p>
-            <p className="text-sm mt-1 text-gray-400">or ask me a nutrition question</p>
+            <p className="text-base font-medium text-gray-500">Fotoğraf çek veya sor</p>
+            <p className="text-sm mt-1 text-gray-400">Öğün kaydedebilir, günlük durumunu sorabilirsin</p>
           </div>
         )}
+
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -334,9 +278,7 @@ export function LogMeal() {
                 {msg.isLoading ? (
                   <div className="bg-white shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm text-gray-500">
-                      {analyse.isPending ? 'Analysing…' : 'Thinking…'}
-                    </span>
+                    <span className="text-sm text-gray-500">Düşünüyor…</span>
                   </div>
                 ) : msg.analysisResult ? (
                   <ChatAnalysisCard
@@ -355,12 +297,10 @@ export function LogMeal() {
         ))}
       </div>
 
-      {/* Input bar */}
       <div
         className="shrink-0 bg-white border-t border-gray-100 px-3 pt-2 pb-2"
         style={{ marginBottom: 'calc(56px + env(safe-area-inset-bottom))' }}
       >
-        {/* Staged image preview */}
         {stagedImage && (
           <div className="relative inline-block mb-2">
             <img
@@ -380,8 +320,8 @@ export function LogMeal() {
         {imageError && (
           <p className="text-xs text-red-500 mb-1">{imageError}</p>
         )}
+
         <div className="flex items-center gap-2">
-          {/* Camera / compressing indicator */}
           <label
             htmlFor="chat-image"
             className={`shrink-0 p-2.5 rounded-xl bg-teal-50 text-teal-600 cursor-pointer hover:bg-teal-100 transition-colors flex items-center justify-center min-h-[44px] min-w-[44px] ${compressing || isLoading ? 'opacity-50 pointer-events-none' : ''}`}
@@ -412,7 +352,7 @@ export function LogMeal() {
                 void handleSend()
               }
             }}
-            placeholder={stagedImage ? 'Add a message… (optional)' : 'Ask about your food…'}
+            placeholder={stagedImage ? 'Add a message… (optional)' : 'Fotoğraf çek veya sor…'}
             disabled={isLoading}
             className="flex-1 bg-gray-100 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-400 disabled:opacity-50 min-h-[44px]"
           />
