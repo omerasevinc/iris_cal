@@ -184,6 +184,9 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
       const err = await res.json().catch(() => ({ error: res.statusText }))
       throw new Error((err as { error?: string }).error ?? 'Request failed')
     }
+    if (res.status === 204 || res.headers.get('content-length') === '0') {
+      return undefined as T
+    }
     return res.json() as Promise<T>
   } finally {
     clearTimeout(timer)
