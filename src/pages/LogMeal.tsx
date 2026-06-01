@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Edit3, Send, X } from 'lucide-react'
+import { Camera, Edit3, Send, Trash2, X } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 import { useAnalyseMeal, useSaveMeal, useChat } from '../hooks/useMeals'
 import { EditMealModal } from '../components/EditMealModal'
@@ -45,10 +45,26 @@ function buildChatHistory(messages: ChatMessage[]): ChatApiMessage[] {
 function ChatAnalysisCard({
   result,
   onLog,
+  isLatest,
 }: {
   result: AnalysisResult
   onLog: () => void
+  isLatest: boolean
 }) {
+  if (!isLatest) {
+    return (
+      <div className="bg-white rounded-2xl rounded-tl-sm shadow-sm px-4 py-3 max-w-xs opacity-50">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium text-gray-700 truncate">{result.meal_name}</p>
+          <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+            Outdated
+          </span>
+        </div>
+        <p className="text-xs text-gray-400 mt-0.5">{Math.round(result.total_kcal)} kcal</p>
+      </div>
+    )
+  }
+
   const confidenceClass =
     result.confidence === 'high'
       ? 'bg-green-100 text-green-700'
@@ -87,6 +103,7 @@ function ChatAnalysisCard({
           Log this meal
         </button>
       </div>
+      <p className="text-xs text-gray-400 text-center mt-2">Wrong? Describe it in the chat below</p>
     </div>
   )
 }
@@ -252,18 +269,31 @@ export function LogMeal() {
   const isLoading = analyse.isPending || chatMutation.isPending
   const canSend = (!!stagedImage || inputText.trim() !== '') && !isLoading && !compressing
 
+  const latestAnalysisId = [...messages].reverse().find((m) => m.analysisResult)?.id ?? null
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 pt-12 pb-3 flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">Log meal</h1>
-        <button
-          onClick={openManualEntry}
-          className="flex items-center gap-1.5 text-teal-600 font-medium text-sm py-2 px-3 rounded-xl border border-teal-200 hover:bg-teal-50 transition-colors"
-        >
-          <Edit3 size={15} />
-          Manual
-        </button>
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              onClick={clearMessages}
+              className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              aria-label="Clear chat"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+          <button
+            onClick={openManualEntry}
+            className="flex items-center gap-1.5 text-teal-600 font-medium text-sm py-2 px-3 rounded-xl border border-teal-200 hover:bg-teal-50 transition-colors"
+          >
+            <Edit3 size={15} />
+            Manual
+          </button>
+        </div>
       </header>
 
       {/* Message list */}
@@ -312,6 +342,7 @@ export function LogMeal() {
                   <ChatAnalysisCard
                     result={msg.analysisResult}
                     onLog={() => openLogModal(msg.analysisResult!)}
+                    isLatest={msg.id === latestAnalysisId}
                   />
                 ) : (
                   <div className="bg-white shadow-sm rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-gray-800 whitespace-pre-wrap">
