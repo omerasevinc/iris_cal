@@ -87,6 +87,7 @@ export interface ChatApiMessage {
 
 export interface ChatApiResponse {
   text: string
+  analysisResult?: AnalysisResult
 }
 
 export interface ChatMessage {

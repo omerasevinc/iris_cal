@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
+import { PendingMealProvider } from './contexts/PendingMealContext'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { LogMeal } from './pages/LogMeal'
@@ -15,6 +16,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <PendingMealProvider>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route
@@ -60,5 +62,6 @@ export default function App() {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </PendingMealProvider>
   )
 }

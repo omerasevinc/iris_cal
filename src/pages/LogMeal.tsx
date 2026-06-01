@@ -4,6 +4,7 @@ import { Camera, Edit3, Send, X } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 import { useAnalyseMeal, useSaveMeal, useChat } from '../hooks/useMeals'
 import { EditMealModal } from '../components/EditMealModal'
+import { usePendingMeal } from '../contexts/PendingMealContext'
 import type {
   AnalysisResult,
   SaveMealBody,
@@ -92,9 +93,9 @@ function ChatAnalysisCard({
 
 export function LogMeal() {
   const navigate = useNavigate()
+  const { messages, setMessages, clearMessages } = usePendingMeal()
   const fileRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [stagedImage, setStagedImage] = useState<StagedImage | null>(null)
   const [compressing, setCompressing] = useState(false)
@@ -209,7 +210,14 @@ export function LogMeal() {
         const result = await chatMutation.mutateAsync(history)
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === loadingMsgId ? { ...m, isLoading: false, text: result.text } : m,
+            m.id === loadingMsgId
+              ? {
+                  ...m,
+                  isLoading: false,
+                  text: result.text,
+                  ...(result.analysisResult ? { analysisResult: result.analysisResult } : {}),
+                }
+              : m,
           ),
         )
       } catch {
@@ -237,6 +245,7 @@ export function LogMeal() {
   async function handleSave(data: SaveMealBody) {
     await save.mutateAsync({ ...data, logged_at: new Date().toISOString() })
     setShowModal(false)
+    clearMessages()
     navigate('/dashboard', { replace: true })
   }
 
