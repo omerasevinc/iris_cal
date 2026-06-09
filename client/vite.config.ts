@@ -22,6 +22,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Hashed JS/CSS assets are handled by precache; index.html navigation is
+        // handled by NavigationRoute — no manual CacheFirst rule needed.
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
@@ -31,11 +33,6 @@ export default defineConfig({
               networkTimeoutSeconds: 10,
               cacheableResponse: { statuses: [0, 200] },
             },
-          },
-          {
-            urlPattern: /\.(?:js|css|html|png|svg|ico|woff2?)$/,
-            handler: 'CacheFirst',
-            options: { cacheName: 'static-cache' },
           },
         ],
       },
