@@ -103,6 +103,17 @@ export interface ChatMessage {
 
 // ─── Social types ─────────────────────────────────────────────────────────────
 
+export interface SocialMeal {
+  id: number
+  meal_name: string
+  logged_at: string
+  total_kcal: number
+  total_protein_g: number
+  total_fat_g: number
+  total_carbs_g: number
+  items: FoodItem[]
+}
+
 export interface UserTodaySummary {
   user_id: number
   name: string
@@ -114,6 +125,7 @@ export interface UserTodaySummary {
   protein_target: number
   fat_target: number
   carbs_target: number
+  meals: SocialMeal[]
 }
 
 export async function socialTodayApi(): Promise<UserTodaySummary[]> {
