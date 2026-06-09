@@ -101,6 +101,25 @@ export interface ChatMessage {
   isLoading?: boolean
 }
 
+// ─── Social types ─────────────────────────────────────────────────────────────
+
+export interface UserTodaySummary {
+  user_id: number
+  name: string
+  total_kcal: number
+  total_protein_g: number
+  total_fat_g: number
+  total_carbs_g: number
+  kcal_target: number
+  protein_target: number
+  fat_target: number
+  carbs_target: number
+}
+
+export async function socialTodayApi(): Promise<UserTodaySummary[]> {
+  return apiFetch<UserTodaySummary[]>('/social/today')
+}
+
 export async function chatApi(messages: ChatApiMessage[]): Promise<ChatApiResponse> {
   return apiFetch<ChatApiResponse>('/chat', {
     method: 'POST',

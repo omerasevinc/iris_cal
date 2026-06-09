@@ -8,6 +8,7 @@ import { History } from './pages/History'
 import { Calendar } from './pages/Calendar'
 import { Settings } from './pages/Settings'
 import { NutritionChat } from './pages/NutritionChat'
+import { Social } from './pages/Social'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth()
@@ -65,6 +66,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <NutritionChat />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/social"
+        element={
+          <ProtectedRoute>
+            <Social />
           </ProtectedRoute>
         }
       />

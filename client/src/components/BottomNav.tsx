@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Camera, CalendarDays, BarChart2, Settings } from 'lucide-react'
+import { Home, Camera, CalendarDays, Users, Settings } from 'lucide-react'
 
 const links = [
   { to: '/dashboard', icon: Home, label: 'Home' },
   { to: '/log', icon: Camera, label: 'Log' },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
-  { to: '/history', icon: BarChart2, label: 'History' },
+  { to: '/social', icon: Users, label: 'Friends' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

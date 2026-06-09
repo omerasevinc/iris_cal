@@ -238,7 +238,7 @@ export async function nutritionChat(ctx: NutritionContext, messages: ChatMessage
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 2048,
     system: systemPrompt,
     messages: sdkMessages,
   })
@@ -261,6 +261,9 @@ export async function nutritionChat(ctx: NutritionContext, messages: ChatMessage
     } catch {
       // malformed JSON — return text only
     }
+  } else {
+    // Truncated response: strip any dangling [MEAL_JSON] fragment so it doesn't show in chat
+    text = raw.replace(/\s*\[MEAL_JSON\][\s\S]*$/, '').trim()
   }
 
   return analysisResult ? { text, analysisResult } : { text }
@@ -309,6 +312,9 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
     } catch {
       // malformed JSON — just ignore and return text only
     }
+  } else {
+    // Truncated response: strip any dangling [MEAL_JSON] fragment so it doesn't show in chat
+    text = raw.replace(/\s*\[MEAL_JSON\][\s\S]*$/, '').trim()
   }
 
   return analysisResult ? { text, analysisResult } : { text }

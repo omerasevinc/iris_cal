@@ -4,11 +4,13 @@ import {
   apiUpload,
   chatApi,
   nutritionChatApi,
+  socialTodayApi,
   type MealLog,
   type DayHistory,
   type AnalysisResult,
   type SaveMealBody,
   type UserSettings,
+  type UserTodaySummary,
   type ChatApiMessage,
   type NutritionChatMessage,
 } from '../api'
@@ -94,6 +96,15 @@ export function useSettings() {
     queryKey: ['settings'],
     queryFn: () => apiFetch<UserSettings>('/settings'),
     staleTime: 5 * 60_000,
+  })
+}
+
+export function useSocialToday() {
+  return useQuery<UserTodaySummary[]>({
+    queryKey: ['social-today'],
+    queryFn: socialTodayApi,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   })
 }
 
